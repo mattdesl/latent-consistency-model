@@ -63,7 +63,6 @@ class Predictor:
             )
         yield from self.do_predict(
             prompt_embeds=prompt_embeds,
-            num_images_per_prompt=1, 
             lcm_origin_steps=50,
             **kwargs,
             num_inference_steps=steps
@@ -136,6 +135,7 @@ class Predictor:
         
         # 7. LCM MultiStep Sampling Loop:
         for i, t in enumerate(timesteps):
+            print(i, t)
             ts = torch.full((bs,), t, device=device, dtype=torch.long)
             
             # model prediction (v-prediction, eps, x)
@@ -188,31 +188,3 @@ class Predictor:
         result.save(output_path)
         # print(f"Output image saved to: {output_path}")
         return output_path
-
-
-    # async def predict(self, prompt: any, width: int, height: int, steps: int, seed: int = None) -> str:
-    #     seed = seed or int.from_bytes(os.urandom(2), "big")
-    #     print(f"Using seed: {seed}")
-    #     torch.manual_seed(seed)
-        
-    #     device = self.pipe._execution_device
-    #     prompt_embeds = self.pipe._encode_prompt(
-    #         prompt, device, 1, prompt_embeds=None
-    #     )
-
-    #     async def save_progress (latents, step, all_steps):
-    #         images = self.latent_to_image(latents)
-    #         for i, cur_image in enumerate(images):
-    #             output_path = self._save_result(cur_image, prompt, seed, width, height, all_steps, 0, step)
-
-    #     return await self.do_predict(
-    #         prompt_embeds=prompt_embeds,
-    #         width=width,
-    #         height=height,
-    #         guidance_scale=8.0,
-    #         num_inference_steps=steps,
-    #         num_images_per_prompt=1, 
-    #         lcm_origin_steps=50,
-    #         output_type="latent",
-    #         callback=save_progress
-    #     )

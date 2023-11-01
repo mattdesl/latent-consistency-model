@@ -11,8 +11,32 @@ from PIL import Image
 import io
 import asyncio
 import time
+import math
+
 model = None
 generator = None
+
+def create_image_grid(images, background_color='white'):
+    if not images:
+        raise ValueError("The images list cannot be empty")
+
+    num_images = len(images)
+    # Calculate the number of rows and columns for the grid
+    rows = round(num_images ** 0.5)
+    cols = math.ceil(num_images / rows)
+
+    # Get dimensions of the first image (assuming all images are the same size)
+    img_width, img_height = images[0].size
+    
+    # Create a new image with specified background color
+    grid_img = Image.new('RGB', (img_width * cols, img_height * rows), background_color)
+    
+    for i, image in enumerate(images):
+        col = i % cols
+        row = i // cols
+        grid_img.paste(image, (img_width * col, img_height * row))
+
+    return grid_img
 
 async def websocket_handler(request):
     # max_size=1024 * 1024 * 1024
@@ -25,9 +49,14 @@ async def websocket_handler(request):
         if generator is not None:
           try:
               r = next(generator)
-              z = r.latents.clone()
-              images = model.latent_to_image(z)
-              image = images[0]
+              # z = r.latents.clone()
+              images = model.latent_to_image(r.latents)
+              # print("GOT IMAGES", len(images))
+              if len(images) > 1:
+                 image = create_image_grid(images)
+              else:
+                 image = images[0]
+              # image = images[0]
               bytes = io.BytesIO()
               image.save(bytes, format='PNG')
 
@@ -68,6 +97,7 @@ async def websocket_handler(request):
             height=data['height'],
             steps=data['steps'],
             seed=data['seed'],
+            num_images_per_prompt=1,
             guidance_scale=data['guidance_scale']
         )
         return prompt_embeds

@@ -43,6 +43,8 @@
       <div id="seed"></div>
       <button id="shuffle">🎲</button>
     </div>
+
+    <button class="prompt-mod">prompt mod</button>
     <label
       >Size:
       <select class="size-toggle">
@@ -54,23 +56,6 @@
 
     <div id="progress">
       <canvas id="canvas"></canvas>
-      <div class="prompt-container">
-        <div>
-          <button class="prompt-energy-shuffle">shuffle</button>
-        </div>
-        <canvas id="prompt-canvas" style="width: 256px; height: 256px"></canvas>
-        <label
-          >index
-          <input
-            type="range"
-            min="0"
-            max="77"
-            value="0"
-            step="1"
-            class="prompt-index"
-            style="width: 350px"
-        /></label>
-      </div>
     </div>
     <div id="ranges"></div>
     <script>
@@ -97,19 +82,17 @@
 
       let width = 256;
       let height = 256;
-      const STEPS = 6;
+      const STEPS = 14;
       const input = document.querySelector("#prompt-input");
       const canvas = document.querySelector("#canvas");
       const context = canvas.getContext("2d");
-      canvas.width = width;
-      canvas.height = height;
 
       let promptIndex = 0;
 
-      const promptCanvas = document.querySelector("#prompt-canvas");
-      const promptContext = promptCanvas.getContext("2d");
-      promptCanvas.width = width;
-      promptCanvas.height = height;
+      // const promptCanvas = document.querySelector("#prompt-canvas");
+      // const promptContext = promptCanvas.getContext("2d");
+      // promptCanvas.width = width;
+      // promptCanvas.height = height;
 
       prompt = localStorage.getItem("prompt") || "space suit";
       input.value = prompt;
@@ -123,41 +106,58 @@
         } else if (sizer.value === "biggest") {
           width = height = 768;
         }
-        canvas.width = width;
-        canvas.height = height;
         onPromptOrSeedChange();
       };
 
-      const promptIndexEl = document.querySelector(".prompt-index");
-      document.querySelector(".prompt-energy-shuffle").onclick = (ev) => {
+      // const promptIndexEl = document.querySelector(".prompt-index");
+      document.querySelector(".prompt-mod").onclick = async (ev) => {
         ev.preventDefault();
-        if (!prompt_embeds) return;
-        const embedding = prompt_embeds[0][promptIndex];
-        const f = 2;
-        for (let i = 0; i < embedding.length; i++) {
-          // embedding[i] *= 0.5;
-          embedding[i] *= Math.random();
-          // embedding[i] += (Math.random() * 2 - 1) * f;
+
+        if (!prompt_embeds) {
+          console.log("Fetching embedding..");
+          prompt_embeds = await fetchPromptEmbedding(prompt);
         }
+        const current = prompt_embeds;
+        const newPrompt = await randomHaiku();
+        console.log("new prompt", newPrompt);
+        const embed = await fetchPromptEmbedding(newPrompt);
+        for (let i = 0; i < current.length; i++) {
+          for (let k = 0; k < current[i].length; k++) {
+            const row = current[i][k];
+            for (let x = 0; x < row.length; x++) {
+              // prompt_embeds[i][k][x] *= 0.5;
+              prompt_embeds[i][k][x] = lerp(
+                prompt_embeds[i][k][x],
+                embed[i][k][x],
+                0.5
+              );
+            }
+          }
+        }
+
         onPromptOrSeedChange();
       };
-      promptIndexEl.oninput = () => {
-        if (!prompt_embeds) return;
-        const rows = prompt_embeds[0].length - 1;
-        promptIndex = Math.max(
-          0,
-          Math.min(rows, parseInt(promptIndexEl.value, 10))
-        );
-        // drawPrompt1D();
-      };
+      // promptIndexEl.oninput = () => {
+      //   if (!prompt_embeds) return;
+      //   const rows = prompt_embeds[0].length - 1;
+      //   promptIndex = Math.max(
+      //     0,
+      //     Math.min(rows, parseInt(promptIndexEl.value, 10))
+      //   );
+      //   // drawPrompt1D();
+      // };
 
-      document.querySelector("#haiku").onclick = async (ev) => {
-        ev.preventDefault();
+      const randomHaiku = async () => {
         if (!haikus) {
           const txt = await (await fetch("haiku-23k.txt")).text();
           haikus = txt.split("\n");
         }
-        input.value = haikus[Math.floor(Math.random() * haikus.length)];
+        return haikus[Math.floor(Math.random() * haikus.length)];
+      };
+
+      document.querySelector("#haiku").onclick = async (ev) => {
+        ev.preventDefault();
+        input.value = await randomHaiku();
         textChange();
       };
 
@@ -218,7 +218,9 @@
       socket.onmessage = async (event) => {
         if (event.data instanceof Blob) {
           const bitmap = await createImageBitmap(event.data);
-          context.drawImage(bitmap, 0, 0);
+          canvas.width = bitmap.width;
+          canvas.height = bitmap.height;
+          context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
           ping();
         } else {
           const data = JSON.parse(event.data);
@@ -248,11 +250,16 @@
         }
       }
 
+      async function fetchPromptEmbedding(p) {
+        const queryString = new URLSearchParams({
+          prompt: p,
+        }).toString();
+        const resp = await fetch(`/prompt?${queryString}`);
+        return resp.json();
+      }
+
       async function promptTextChanged() {
-        // const queryString = new URLSearchParams({
-        //   prompt,
-        // }).toString();
-        // prompt_embeds = await (await fetch(`/prompt?${queryString}`)).json();
+        prompt_embeds = null;
         onPromptOrSeedChange();
       }
 
@@ -260,13 +267,14 @@
         // drawPrompt2D();
         if (socket.readyState === WebSocket.OPEN) {
           const data = {
-            prompt,
-            width: canvas.width,
-            height: canvas.height,
+            width: width,
+            height: height,
             seed: seed,
-            steps: canvas.width >= 512 ? Math.min(STEPS, 5) : STEPS,
+            steps: width >= 512 ? STEPS : STEPS,
             guidance_scale: 7.5,
           };
+          if (prompt_embeds) data.prompt_embeds = prompt_embeds;
+          else data.prompt = prompt;
           socket.send(JSON.stringify(data));
           ping();
         }
@@ -350,6 +358,10 @@
       function inverseLerp(min, max, t) {
         if (Math.abs(min - max) < Number.EPSILON) return 0;
         else return (t - min) / (max - min);
+      }
+
+      function lerp(min, max, t) {
+        return min * (1 - t) + max * t;
       }
 
       function bounds(dims) {

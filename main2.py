@@ -20,10 +20,8 @@ def main():
             prompts = [prompt.replace(' / ', '\n') for prompt in prompts]
 
         for prompt in prompts:
-            prompt_a = "wilflower meadow"
-            prompt_b = "blood orange sky"
-            data_a = predictor.run(
-                prompt=prompt_a,
+            data = predictor.run(
+                prompt=prompt,
                 width=args.width,
                 height=args.height,
                 steps=args.steps,
@@ -40,11 +38,7 @@ def main():
             #     guidance_scale=7.5,
             # )
             
-            # xr = data_a.shape[1]
-            # print(data_a[0].size())
-            # new_latent = torch.lerp(data_a[0], data_b[0], 0.25)
-            # new_latent = torch.lerp(data_a[0], data_b[0], 0.25)
-            images = predictor.latent_to_image(data_a[0])
+            images = predictor.latent_to_image(data[0])
             output_path = predictor.save_result(images[0],prompt,args.seed,args.steps)
             print(f"Output image saved to: {output_path}")
     else:
