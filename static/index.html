@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI Generation Progress</title>
+    <style>
+      html,
+      body {
+        font-family: monospace;
+      }
+      input {
+        font-family: monospace;
+        flex-grow: 1;
+      }
+      .tool {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        margin-bottom: 10px;
+        width: 100%;
+        justify-content: space-between;
+      }
+      #shuffle {
+        margin-left: 10px;
+      }
+      #seed {
+        font-size: 14px;
+        margin-left: 10px;
+      }
+      .prompt-container {
+        max-width: 500px;
+        display: flex;
+        flex-direction: column;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="tool">
+      <button id="haiku">haiku</button>
+      <input type="text" value="space suit" id="prompt-input" />
+      <div id="seed"></div>
+      <button id="shuffle">🎲</button>
+    </div>
+    <label
+      >Size:
+      <select class="size-toggle">
+        <option>small</option>
+        <option>big</option>
+        <option>biggest</option>
+      </select>
+    </label>
+
+    <div id="progress">
+      <canvas id="canvas"></canvas>
+      <div class="prompt-container">
+        <div>
+          <button class="prompt-energy-shuffle">shuffle</button>
+        </div>
+        <canvas id="prompt-canvas" style="width: 256px; height: 256px"></canvas>
+        <label
+          >index
+          <input
+            type="range"
+            min="0"
+            max="77"
+            value="0"
+            step="1"
+            class="prompt-index"
+            style="width: 350px"
+        /></label>
+      </div>
+    </div>
+    <div id="ranges"></div>
+    <script>
+      let haikus;
+      let seed;
+      let prompt, prompt_embeds;
+      const newSeed = () => {
+        seed = Math.floor(Math.random() * 0xffffffff);
+        localStorage.setItem("seed", String(seed));
+        updateSeed();
+      };
+
+      const updateSeed = () => {
+        document.querySelector("#seed").textContent = seed;
+      };
+
+      const initialSeed = localStorage.getItem("seed");
+      if (initialSeed) {
+        seed = parseInt(initialSeed, 10);
+        updateSeed();
+      } else {
+        newSeed();
+      }
+
+      let width = 256;
+      let height = 256;
+      const STEPS = 6;
+      const input = document.querySelector("#prompt-input");
+      const canvas = document.querySelector("#canvas");
+      const context = canvas.getContext("2d");
+      canvas.width = width;
+      canvas.height = height;
+
+      let promptIndex = 0;
+
+      const promptCanvas = document.querySelector("#prompt-canvas");
+      const promptContext = promptCanvas.getContext("2d");
+      promptCanvas.width = width;
+      promptCanvas.height = height;
+
+      prompt = localStorage.getItem("prompt") || "space suit";
+      input.value = prompt;
+
+      const sizer = document.querySelector(".size-toggle");
+      sizer.oninput = () => {
+        if (sizer.value === "small") {
+          width = height = 256;
+        } else if (sizer.value === "big") {
+          width = height = 512;
+        } else if (sizer.value === "biggest") {
+          width = height = 768;
+        }
+        canvas.width = width;
+        canvas.height = height;
+        onPromptOrSeedChange();
+      };
+
+      const promptIndexEl = document.querySelector(".prompt-index");
+      document.querySelector(".prompt-energy-shuffle").onclick = (ev) => {
+        ev.preventDefault();
+        if (!prompt_embeds) return;
+        const embedding = prompt_embeds[0][promptIndex];
+        const f = 2;
+        for (let i = 0; i < embedding.length; i++) {
+          // embedding[i] *= 0.5;
+          embedding[i] *= Math.random();
+          // embedding[i] += (Math.random() * 2 - 1) * f;
+        }
+        onPromptOrSeedChange();
+      };
+      promptIndexEl.oninput = () => {
+        if (!prompt_embeds) return;
+        const rows = prompt_embeds[0].length - 1;
+        promptIndex = Math.max(
+          0,
+          Math.min(rows, parseInt(promptIndexEl.value, 10))
+        );
+        // drawPrompt1D();
+      };
+
+      document.querySelector("#haiku").onclick = async (ev) => {
+        ev.preventDefault();
+        if (!haikus) {
+          const txt = await (await fetch("haiku-23k.txt")).text();
+          haikus = txt.split("\n");
+        }
+        input.value = haikus[Math.floor(Math.random() * haikus.length)];
+        textChange();
+      };
+
+      document.querySelector("#shuffle").onclick = async (ev) => {
+        ev.preventDefault();
+        newSeed();
+        await onPromptOrSeedChange();
+      };
+
+      canvas.addEventListener("click", async (ev) => {
+        ev.preventDefault();
+
+        const a = document.createElement("a");
+        const blob = await new Promise((r) => canvas.toBlob(r, "image/png"));
+        a.href = URL.createObjectURL(blob);
+        a.download = Date.now() + ".png";
+        a.click();
+      });
+
+      let socket;
+      let retry;
+      const reconnect = () => {
+        clearTimeout(retry);
+        socket = new WebSocket("ws://localhost:8000/ws");
+        socket.onopen = async () => {
+          clearTimeout(retry);
+          prompt = (input.value || "").trim();
+          console.log("Connected");
+          await promptTextChanged();
+        };
+        socket.onclose = async () => {
+          clearTimeout(retry);
+          retry = setTimeout(() => {
+            console.log("Attempting reconnect");
+            reconnect();
+          }, 1000);
+        };
+      };
+      reconnect();
+
+      function ping() {
+        if (socket.readyState === WebSocket.OPEN) {
+          socket.send("ping");
+        }
+      }
+
+      async function loadImage(uri) {
+        return new Promise((resolve, reject) => {
+          const img = new Image();
+          img.src = uri;
+          img.onload = () => {
+            resolve(img);
+          };
+          img.onerror = () => reject(new Error(`Error loading image ${uri}`));
+        });
+      }
+
+      socket.onmessage = async (event) => {
+        if (event.data instanceof Blob) {
+          const bitmap = await createImageBitmap(event.data);
+          context.drawImage(bitmap, 0, 0);
+          ping();
+        } else {
+          const data = JSON.parse(event.data);
+          if (data.image) {
+            const { image } = data;
+            // const uri = "data:image/png;base64," + image;
+            // const blob = await (await fetch(image)).blob();
+            // console.log(image);
+            const img = await loadImage(image);
+            context.drawImage(img, 0, 0);
+            ping();
+          } else if (data.prompt_embeds) {
+            // prompt_embeds = data.prompt_embeds;
+            // drawPrompt1D();
+          }
+        }
+      };
+
+      input.oninput = textChange;
+
+      async function textChange() {
+        const value = (input.value || "").trim();
+        if (value !== prompt) {
+          prompt = value;
+          await promptTextChanged();
+          localStorage.setItem("prompt", prompt);
+        }
+      }
+
+      async function promptTextChanged() {
+        // const queryString = new URLSearchParams({
+        //   prompt,
+        // }).toString();
+        // prompt_embeds = await (await fetch(`/prompt?${queryString}`)).json();
+        onPromptOrSeedChange();
+      }
+
+      function onPromptOrSeedChange() {
+        // drawPrompt2D();
+        if (socket.readyState === WebSocket.OPEN) {
+          const data = {
+            prompt,
+            width: canvas.width,
+            height: canvas.height,
+            seed: seed,
+            steps: canvas.width >= 512 ? Math.min(STEPS, 5) : STEPS,
+            guidance_scale: 7.5,
+          };
+          socket.send(JSON.stringify(data));
+          ping();
+        }
+      }
+
+      async function send() {
+        if (socket.readyState !== WebSocket.OPEN) {
+          return console.warn("Socket closed");
+        }
+        const prompt = input.value;
+
+        // console.time("rpompt");
+
+        // console.timeEnd("rpompt");
+      }
+
+      function drawPrompt1D() {
+        if (!prompt_embeds) return;
+        console.log("drawing", prompt_embeds);
+        const data = prompt_embeds;
+        const embedding = data[0];
+        const rows = embedding.length;
+
+        const row = embedding[promptIndex];
+        const bins = row.length;
+        promptCanvas.width = bins;
+        promptCanvas.height = 256;
+        // promptCanvas.style.height = "256px";
+        // promptCanvas.style.width = "256px";
+        promptCanvas.style.width = "100%";
+        promptCanvas.style.height = "auto";
+        const imageData = promptContext.createImageData(
+          promptCanvas.width,
+          promptCanvas.height
+        );
+        const imagePixels = imageData.data;
+        const [min, max] = bounds(row);
+        promptContext.beginPath();
+        promptContext.strokeStyle = "black";
+        for (let x = 0; x < bins; x++) {
+          const idx = x;
+          const L = inverseLerp(min, max, row[x]);
+          promptContext.lineTo(x, L * promptCanvas.height);
+        }
+        promptContext.stroke();
+        // promptContext.putImageData(imageData, 0, 0);
+      }
+
+      function drawPrompt2D() {
+        const data = prompt_embeds;
+        if (!data) return;
+        const embedding = data[0];
+        const rows = embedding.length;
+        const dims = embedding[0].length;
+        promptCanvas.width = dims;
+        promptCanvas.height = rows;
+        // promptCanvas.style.height = "256px";
+        // promptCanvas.style.width = "256px";
+        promptCanvas.style.width = "auto";
+        promptCanvas.style.height = "auto";
+        const imageData = promptContext.createImageData(
+          promptCanvas.width,
+          promptCanvas.height
+        );
+        const imagePixels = imageData.data;
+        for (let y = 0; y < rows; y++) {
+          const row = embedding[y];
+          const [min, max] = bounds(row);
+          for (let x = 0; x < dims; x++) {
+            const idx = x + y * dims;
+            const L = inverseLerp(min, max, row[x]) * 0xff;
+            imagePixels[idx * 4 + 0] = L;
+            imagePixels[idx * 4 + 1] = L;
+            imagePixels[idx * 4 + 2] = L;
+            imagePixels[idx * 4 + 3] = 0xff;
+          }
+        }
+        promptContext.putImageData(imageData, 0, 0);
+      }
+
+      function inverseLerp(min, max, t) {
+        if (Math.abs(min - max) < Number.EPSILON) return 0;
+        else return (t - min) / (max - min);
+      }
+
+      function bounds(dims) {
+        let min = Infinity;
+        let max = -Infinity;
+        dims.forEach((d) => {
+          min = Math.min(min, d);
+          max = Math.max(max, d);
+        });
+        return [min, max];
+      }
+
+      function boundsMultiDim(items) {
+        let min = Infinity;
+        let max = -Infinity;
+        items.forEach((list) => {
+          list.forEach((dims) => {
+            dims.forEach((d) => {
+              min = Math.min(min, d);
+              max = Math.max(max, d);
+            });
+          });
+        });
+        return [min, max];
+      }
+    </script>
+  </body>
+</html>
