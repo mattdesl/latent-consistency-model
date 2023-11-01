@@ -41,11 +41,21 @@ class Predictor:
             output_path = self.save_result(image,prompt,seed,data[1])
             print(f"{data[1]+1} of {data[2]} image saved to: {output_path}")
 
-    def run (self, prompt, seed=None, **kwargs):
+    def run (self, prompt, seed=None, steps=4, **kwargs):
         seed = seed or int.from_bytes(os.urandom(2), "big")
-        for data in self.generate(prompt=prompt, seed=seed, **kwargs):
-            if data[1] == data[2] - 1:
-                return data
+        print(f"Using seed: {seed}")
+        torch.manual_seed(seed)
+        device = self.device
+        prompt_embeds = self.pipe._encode_prompt(
+            prompt, device, 1, prompt_embeds=None
+        )
+        for data in self.do_predict(
+                prompt_embeds=prompt_embeds,
+                lcm_origin_steps=50,
+                **kwargs,
+                num_inference_steps=steps
+            ):
+            print(f"{data[1]+1} of {data[2]} image generated")
 
     def generate (self, 
                 prompt = None,
@@ -76,8 +86,8 @@ class Predictor:
 
     def do_predict (self,
         prompt = None,
-        height = 768,
-        width = 768,
+        height = 512,
+        width = 512,
         guidance_scale = 7.5,
         num_images_per_prompt = 1,
         latents = None,
