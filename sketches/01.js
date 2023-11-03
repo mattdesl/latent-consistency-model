@@ -9,6 +9,7 @@ console.log("Seed:", random.getSeed());
 const settings = {
   suffix: random.getSeed(),
   dimensions: "A4",
+  pixelsPerInch: 300,
   // dimensions: [256, 256],
 };
 
@@ -67,7 +68,7 @@ const sketch = async ({ width, height, update }) => {
   });
 
   const generationSet = new Set();
-  const maxGenerations = 5;
+  const maxGenerations = 7;
 
   const nodes = getLeafNodes(tree);
   const prompts = [
