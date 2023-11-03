@@ -66,14 +66,14 @@ const sketch = async ({ width, height, update }) => {
     // maxDepth: Infinity,
 
     splitCount: Infinity,
-    maxDepth: 6,
+    maxDepth: 4,
     // squariness: 1,
   });
 
   const generationSet = new Set();
-  const maxGenerations = 8;
 
   const nodes = getLeafNodes(tree);
+  const maxGenerations = nodes.length;
   const prompts = [
     // "zebra",
     "old man",
@@ -98,7 +98,7 @@ const sketch = async ({ width, height, update }) => {
     for (const node of list) {
       const inject = random.pick(prompts);
       // const prompt = `wildflower meadow, bokeh, pastel colors, motion from the wind, drifting petals, dusk sunset, wide shot, 8k hd`;
-      const prompt = `sonia delaunay, geometric abstraction, detailed portrait of a man in glasses, pastel colors`;
+      const prompt = `sonia delaunay, geometric abstraction, detailed landscape of a field, pastel colors`;
       // const prompt = `skateboarding, photography, skater, fisheye`;
       // const prompt = `portrait of a ${inject}, bokeh, depth of field, 8k hd, zoomed out, pastel colors`;
 
