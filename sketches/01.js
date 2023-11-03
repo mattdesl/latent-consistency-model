@@ -43,7 +43,7 @@ const sketch = async ({ width, height, update }) => {
   const rootWidth = width - margin * 2;
   const rootHeight = height - margin * 2;
 
-  const maxImageSize = 768;
+  const maxImageSize = 256;
   const ratio = Math.min(
     1,
     maxImageSize / rootWidth,
@@ -63,7 +63,7 @@ const sketch = async ({ width, height, update }) => {
   const tree = bsp(rootBounds, {
     minDimension: width * 0.01,
     // splitCount: 25,
-    maxDepth: 5,
+    maxDepth: 6,
     squariness: 1,
   });
 
