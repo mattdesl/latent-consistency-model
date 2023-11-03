@@ -3,7 +3,7 @@ import * as random from "canvas-sketch-util/random.js";
 import bsp, { split, Partition } from "./util/bsp.js";
 import { traverseDepthFirst, getLeafNodes } from "./util/tree-util";
 
-random.setSeed("" || random.getRandomSeed());
+random.setSeed("921288" || random.getRandomSeed());
 console.log("Seed:", random.getSeed());
 
 const settings = {
@@ -32,7 +32,7 @@ async function generate(opts = {}) {
 
 const sketch = async ({ width, height, update }) => {
   const dim = Math.min(width, height);
-  const marginFactor = 0.1;
+  const marginFactor = 0.05;
   const margin = dim * marginFactor;
   const rootBounds = [
     [margin, margin],
@@ -42,7 +42,7 @@ const sketch = async ({ width, height, update }) => {
   const rootWidth = width - margin * 2;
   const rootHeight = height - margin * 2;
 
-  const maxImageSize = 512;
+  const maxImageSize = 768;
   const ratio = Math.min(
     1,
     maxImageSize / rootWidth,
@@ -60,29 +60,37 @@ const sketch = async ({ width, height, update }) => {
   // });
 
   const tree = bsp(rootBounds, {
-    minDimension: width * 0.1,
-    splitCount: 15,
+    minDimension: width * 0.01,
+    splitCount: 20,
     maxDepth: Infinity,
+    squariness: 1,
   });
 
   const nodes = getLeafNodes(tree);
-  const prompt =
-    "black and white portrait of an old man, bokeh, depth of field, 8k hd, zoomed out";
+  const prompts = [
+    "zebra",
+    "old man",
+    "old woman",
+    "mature woman",
+    "business woman",
+  ];
 
   for (const node of nodes) {
     const [ox, oy] = random.insideCircle(dim * 0.01);
     node.x += ox;
     node.y += oy;
-    node.rotation = random.gaussian(0, (1 * Math.PI) / 180);
+    node.rotation = random.gaussian(0, (0.5 * Math.PI) / 180);
   }
 
   const startFetch = async () => {
     const list = nodes.sort((a, b) => b.width * b.height - a.width * a.height);
 
     let steps = 4;
-    // for (let step = 2; step <= steps; step++) {
     for (const node of list) {
       let seed = node.generation ? node.generation.seed : imageSeed();
+      const inject = random.pick(prompts);
+      const prompt = `portrait of a ${inject}, bokeh, depth of field, 8k hd, zoomed out, black and white ansel adams photography`;
+
       node.generation = await generate({
         prompt,
         seed,
@@ -92,7 +100,6 @@ const sketch = async ({ width, height, update }) => {
       });
       update();
     }
-    // }
   };
   startFetch();
 
