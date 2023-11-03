@@ -97,7 +97,8 @@ const sketch = async ({ width, height, update }) => {
     let steps = 5;
     for (const node of list) {
       const inject = random.pick(prompts);
-      const prompt = `portrait of a ${inject}, bokeh, depth of field, 8k hd, zoomed out, pastel colors`;
+      const prompt = `skateboarding video, photography, graffiti, colourful`;
+      // const prompt = `portrait of a ${inject}, bokeh, depth of field, 8k hd, zoomed out, pastel colors`;
 
       let generation;
       if (generationSet.size >= maxGenerations) {
