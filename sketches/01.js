@@ -62,9 +62,12 @@ const sketch = async ({ width, height, update }) => {
 
   const tree = bsp(rootBounds, {
     minDimension: width * 0.01,
-    splitCount: 30,
-    maxDepth: Infinity,
-    squariness: 1,
+    // splitCount: 30,
+    // maxDepth: Infinity,
+
+    splitCount: Infinity,
+    maxDepth: 5,
+    // squariness: 1,
   });
 
   const generationSet = new Set();
