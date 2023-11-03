@@ -1,0 +1,24 @@
+{
+  "name": "latent-consistency-model",
+  "version": "1.0.0",
+  "description": "Generate AI images on M1/M2 macs in only a few seconds.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mattdesl/latent-consistency-model.git"
+  },
+  "keywords": [],
+  "author": "Matt DesLauriers <dave.des@gmail.com>",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/mattdesl/latent-consistency-model/issues"
+  },
+  "homepage": "https://github.com/mattdesl/latent-consistency-model#readme",
+  "dependencies": {
+    "canvas-sketch": "^0.7.7",
+    "canvas-sketch-util": "^1.10.0"
+  }
+}

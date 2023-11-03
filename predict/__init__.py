@@ -1,12 +1,9 @@
 import os
 import torch
-import argparse
 import time
-import threading
-import asyncio
-from diffusers import DiffusionPipeline
-import signal
-# from diffusers.image_processor import VaeImageProcessor
+from diffusers import DiffusionPipeline, AutoencoderTiny
+# import signal
+# import compel
 from collections import namedtuple
 
 PredictionResult = namedtuple('PredictionResult', [
@@ -17,14 +14,28 @@ PredictionResult = namedtuple('PredictionResult', [
 ])
 
 class Predictor:
-    def __init__(self):
+    def __init__(self, with_fast = True):
         self.pipe = self._load_model()
         self.device = self.pipe._execution_device
+        
+        self.pipe.set_progress_bar_config(disable=True)
+        # self.compel_proc = Compel(
+        #     tokenizer=self.pipe.tokenizer,
+        #     text_encoder=self.pipe.text_encoder,
+        #     truncate_long_prompts=False,
+        # )
+        if with_fast:
+            self.pipe.fast_vae = AutoencoderTiny.from_pretrained(
+                "madebyollin/taesd", torch_dtype=torch.float32, use_safetensors=True
+            ).to(self.device)
+        self.do_predict = torch.compile(self._do_predict)
+
 
     def _load_model(self):
         model = DiffusionPipeline.from_pretrained(
             "SimianLuo/LCM_Dreamshaper_v7",
             custom_pipeline="latent_consistency_txt2img",
+            # custom_pipeline="latent_consistency_img2img",
             custom_revision="main",
             safety_checker=None,
             feature_extractor=None,
@@ -41,21 +52,11 @@ class Predictor:
             output_path = self.save_result(image,prompt,seed,data[1])
             print(f"{data[1]+1} of {data[2]} image saved to: {output_path}")
 
-    def run (self, prompt, seed=None, steps=4, **kwargs):
+    def run (self, seed=None, **kwargs):
         seed = seed or int.from_bytes(os.urandom(2), "big")
-        print(f"Using seed: {seed}")
-        torch.manual_seed(seed)
-        device = self.device
-        prompt_embeds = self.pipe._encode_prompt(
-            prompt, device, 1, prompt_embeds=None
-        )
-        for data in self.do_predict(
-                prompt_embeds=prompt_embeds,
-                lcm_origin_steps=50,
-                **kwargs,
-                num_inference_steps=steps
-            ):
-            print(f"{data[1]+1} of {data[2]} image generated")
+        for data in self.generate(seed=seed, **kwargs, intermediate_steps=False):
+            if data.step == data.steps - 1:
+                return data
 
     def generate (self, 
                 prompt = None,
@@ -66,25 +67,26 @@ class Predictor:
         seed = seed or int.from_bytes(os.urandom(2), "big")
         print(f"Using seed: {seed}")
         torch.manual_seed(seed)
-        device = self.device
+        # device = self.device
         if prompt_embeds is None:
-            prompt_embeds = self.pipe._encode_prompt(
-                prompt, device, 1, prompt_embeds=None
-            )
-        yield from self.do_predict(
-            prompt_embeds=prompt_embeds,
+            prompt_embeds = self.encode_prompt(prompt)
+        yield from self._do_predict(
             lcm_origin_steps=50,
             **kwargs,
+            prompt_embeds=prompt_embeds,
             num_inference_steps=steps
         )
 
+    @torch.no_grad()
     def encode_prompt (self, prompt):
+        # return self.compel_proc(prompt)
         device = self.device
         return self.pipe._encode_prompt(
             prompt, device, 1, prompt_embeds=None
         )
-
-    def do_predict (self,
+    
+    @torch.no_grad()
+    def _do_predict (self,
         prompt = None,
         height = 512,
         width = 512,
@@ -120,7 +122,10 @@ class Predictor:
             num_images_per_prompt,
             prompt_embeds=prompt_embeds,
         )
-        
+        # prompt_embeds = torchvision.transforms.functional.gaussian_blur(prompt_embeds, kernel_size=3, sigma=0.4)
+        # prompt_embeds = torch.nn.functional.interpolate(prompt_embeds, scale_factor=0.5, mode='nearest')
+        # prompt_embeds = torch.nn.functional.interpolate(prompt_embeds, scale_factor=2, mode='nearest')
+
         # 4. Prepare timesteps
         pipe.scheduler.set_timesteps(num_inference_steps, lcm_origin_steps)
         timesteps = pipe.scheduler.timesteps
@@ -136,6 +141,10 @@ class Predictor:
             device,
             latents,
         )
+
+        # print(latents.size())
+        # latents = torch.nn.functional.interpolate(latents, scale_factor=0.5, mode='bilinear')
+        # latents = torch.nn.functional.interpolate(latents, scale_factor=0, mode='bilinear')
         
         bs = batch_size * num_images_per_prompt
         
@@ -145,7 +154,6 @@ class Predictor:
         
         # 7. LCM MultiStep Sampling Loop:
         for i, t in enumerate(timesteps):
-            print(i, t)
             ts = torch.full((bs,), t, device=device, dtype=torch.long)
             
             # model prediction (v-prediction, eps, x)
@@ -159,14 +167,50 @@ class Predictor:
 
             # compute the previous noisy sample x_t -> x_t-1
             latents, denoised = pipe.scheduler.step(model_pred, i, t, latents, return_dict=False)
-            
+            # latents = torchvision.transforms.functional.gaussian_blur(latents, kernel_size=5, sigma=0.2)
+
             should_ret = intermediate_steps or i == num_inference_steps - 1
             if should_ret:
                 yield PredictionResult(denoised, i, num_inference_steps, prompt_embeds)
     
-    def latent_to_image (self, latent):
+    
+    # def pixelate_image(image_array, pixelation_level):
+    #     # Convert the image array to a PIL Image
+    #     image = Image.fromarray(image_array)
+
+    #     # Calculate the new dimensions
+    #     width, height = image.size
+    #     small_width = width // pixelation_level
+    #     small_height = height // pixelation_level
+
+    #     # Resize down using NEAREST to achieve pixelation
+    #     small_image = image.resize((small_width, small_height), resample=Image.NEAREST)
+
+    #     # Resize back to original size
+    #     pixelated_image = small_image.resize((width, height), resample=Image.NEAREST)
+
+    #     # Convert back to array if needed
+    #     pixelated_array = np.array(pixelated_image)
+
+    #     return pixelated_array
+
+    @torch.no_grad()
+    def latent_to_image (self, latent, fast=False):
         pipe = self.pipe
-        image = pipe.vae.decode(latent / pipe.vae.config.scaling_factor, return_dict=False)[0]
+        # latent += latent
+        
+        # print(latent[0].size())
+        # latent[0]
+        # size = latent.size() / 2
+        # scaler = 8
+        # sf = 1/(2)
+        # latent = torch.nn.functional.interpolate(latent, scale_factor=sf, mode='nearest')
+        # latent = torch.nn.functional.interpolate(latent, scale_factor=1.0/sf, mode='nearest')
+        # latent = torchvision.transforms.functional.gaussian_blur(latent, kernel_size=5, sigma=0.5)
+        # latent = torchvision.transforms.functional.adjust_sharpness(latent, 0.5)
+
+        vae = self.pipe.fast_vae if fast else self.pipe.vae
+        image = vae.decode(latent / vae.config.scaling_factor, return_dict=False)[0]
         do_denormalize = [True] * image.shape[0]
         image = torch.stack(
             [pipe.image_processor.denormalize(image[i]) if do_denormalize[i] else image[i] for i in range(image.shape[0])]
@@ -174,6 +218,16 @@ class Predictor:
         image = pipe.image_processor.pt_to_numpy(image.detach())
         image = pipe.image_processor.numpy_to_pil(image)
         return image
+
+    def save_image(self, result, seed, steps, i=0):
+        timestamp = time.strftime("%Y%m%d-%H%M%S")
+        output_dir = "output"
+        if not os.path.exists(output_dir):
+            os.makedirs(output_dir)
+        output_path = os.path.join(output_dir, f"{timestamp}-seed-{seed}-steps-{steps}-i-{i}.png")
+        result.save(output_path)
+        print(f"Output image saved to: {output_path}")
+        return output_path
 
     def save_result(self, result, prompt: str, seed: int, steps: int):
         timestamp = time.strftime("%Y%m%d-%H%M%S")

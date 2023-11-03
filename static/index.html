@@ -54,11 +54,54 @@
       </select>
     </label>
 
-    <div id="progress">
-      <canvas id="canvas"></canvas>
+    <div id="progress" class="canvas-container">
+      <!-- <canvas id="canvas"></canvas> -->
     </div>
     <div id="ranges"></div>
-    <script>
+    <script type="module">
+      function floyd(image) {
+        var imageData = image.data;
+        var imageDataLength = imageData.length;
+        var w = image.width;
+        var lumR = [],
+          lumG = [],
+          lumB = [];
+
+        var newPixel, err;
+
+        for (var i = 0; i < 256; i++) {
+          lumR[i] = i * 0.299;
+          lumG[i] = i * 0.587;
+          lumB[i] = i * 0.11;
+        }
+
+        // Greyscale luminance (sets r pixels to luminance of rgb)
+        for (var i = 0; i <= imageDataLength; i += 4) {
+          imageData[i] = Math.floor(
+            lumR[imageData[i]] + lumG[imageData[i + 1]] + lumB[imageData[i + 2]]
+          );
+        }
+
+        for (
+          var currentPixel = 0;
+          currentPixel <= imageDataLength;
+          currentPixel += 4
+        ) {
+          // threshold for determining current pixel's conversion to a black or white pixel
+          newPixel = imageData[currentPixel] < 150 ? 0 : 255;
+          err = Math.floor((imageData[currentPixel] - newPixel) / 23);
+          imageData[currentPixel + 0 * 1 - 0] = newPixel;
+          imageData[currentPixel + 4 * 1 - 0] += err * 7;
+          imageData[currentPixel + 4 * w - 4] += err * 3;
+          imageData[currentPixel + 4 * w - 0] += err * 5;
+          imageData[currentPixel + 4 * w + 4] += err * 1;
+          // Set g and b values equal to r (effectively greyscales the image fully)
+          imageData[currentPixel + 1] = imageData[currentPixel + 2] =
+            imageData[currentPixel];
+        }
+
+        return image;
+      }
       let haikus;
       let seed;
       let prompt, prompt_embeds;
@@ -80,12 +123,15 @@
         newSeed();
       }
 
+      const canvasContainer = document.querySelector(".canvas-container");
+
       let width = 256;
       let height = 256;
-      const STEPS = 4;
+      const STEPS = 8;
       const input = document.querySelector("#prompt-input");
-      const canvas = document.querySelector("#canvas");
-      const context = canvas.getContext("2d");
+      // const canvas = document.querySelector("#canvas");
+      // canvas.style.maxHeight = "256px";
+      // const context = canvas.getContext("2d");
 
       let promptIndex = 0;
 
@@ -101,6 +147,7 @@
       sizer.oninput = () => {
         if (sizer.value === "small") {
           width = height = 256;
+          height = 512;
         } else if (sizer.value === "big") {
           width = height = 512;
         } else if (sizer.value === "biggest") {
@@ -150,7 +197,11 @@
       const randomHaiku = async () => {
         if (!haikus) {
           const txt = await (await fetch("haiku-23k.txt")).text();
-          haikus = txt.split("\n");
+          haikus = txt
+            .split("\n")
+            .map((line) => line.split("/").map((n) => n.trim()))
+            .flat();
+          console.log(haikus);
         }
         return haikus[Math.floor(Math.random() * haikus.length)];
       };
@@ -164,17 +215,20 @@
       document.querySelector("#shuffle").onclick = async (ev) => {
         ev.preventDefault();
         newSeed();
+        clearCanvasContainer();
         await onPromptOrSeedChange();
       };
 
-      canvas.addEventListener("click", async (ev) => {
-        ev.preventDefault();
-
-        const a = document.createElement("a");
-        const blob = await new Promise((r) => canvas.toBlob(r, "image/png"));
-        a.href = URL.createObjectURL(blob);
-        a.download = Date.now() + ".png";
-        a.click();
+      window.addEventListener("click", async (ev) => {
+        if (ev.target.tagName.toLowerCase() === "canvas") {
+          ev.preventDefault();
+          const canvas = ev.target;
+          const a = document.createElement("a");
+          const blob = await new Promise((r) => canvas.toBlob(r, "image/png"));
+          a.href = URL.createObjectURL(blob);
+          a.download = Date.now() + ".png";
+          a.click();
+        }
       });
 
       let socket;
@@ -215,12 +269,30 @@
         });
       }
 
+      function clearCanvasContainer() {
+        while (canvasContainer.firstChild) {
+          canvasContainer.firstChild.remove();
+        }
+      }
+
       socket.onmessage = async (event) => {
         if (event.data instanceof Blob) {
           const bitmap = await createImageBitmap(event.data);
+          const canvas = document.createElement("canvas");
           canvas.width = bitmap.width;
           canvas.height = bitmap.height;
+          const context = canvas.getContext("2d");
           context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+          clearCanvasContainer();
+          canvasContainer.appendChild(canvas);
+          // const imgData = context.getImageData(
+          //   0,
+          //   0,
+          //   canvas.width,
+          //   canvas.height
+          // );
+          // floyd(imgData);
+          // context.putImageData(imgData, 0, 0);
           ping();
         } else {
           const data = JSON.parse(event.data);

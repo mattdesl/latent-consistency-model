@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI Generation Progress</title>
+    <style>
+      html,
+      body {
+        font-family: monospace;
+      }
+      input {
+        font-family: monospace;
+        flex-grow: 1;
+      }
+      .tool {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        margin-bottom: 10px;
+        width: 100%;
+        justify-content: space-between;
+      }
+      #shuffle {
+        margin-left: 10px;
+      }
+      #seed {
+        font-size: 14px;
+        margin-left: 10px;
+      }
+      .prompt-container {
+        width: 300px;
+      }
+    </style>
+  </head>
+  <body>
+    <input type="text" class="input prompt-container" placeholder="a prompt" />
+    <label class="seed"></label>
+    <button class="shuffle">🎲</button>
+    <!-- <input type="range" min="1" max="999999" step="1" class="timeline" /> -->
+    <div>
+      Size:
+      <input
+        type="number"
+        min="4"
+        value="256"
+        max="768"
+        step="1"
+        class="width"
+      />
+      x
+      <input
+        type="number"
+        min="4"
+        value="256"
+        max="768"
+        step="1"
+        class="height"
+      />
+    </div>
+    <div>
+      Steps:
+      <input type="number" min="1" value="4" max="32" step="1" class="steps" />
+    </div>
+    <div>
+      Colors:
+      <input
+        type="number"
+        min="1"
+        value="256"
+        max="256"
+        step="1"
+        class="colors"
+      />
+    </div>
+    <div>
+      Downsample:
+      <input
+        type="number"
+        min="1"
+        value="1"
+        max="8"
+        step="1"
+        class="downsample"
+      />
+    </div>
+    <div>
+      <img
+        id="player"
+        src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII="
+      />
+      <canvas class="filter-canvas"></canvas>
+    </div>
+    <script type="module">
+      import { dither, quantize } from "./lib.js";
+      function debounce(func, wait) {
+        let timeout;
+        return function () {
+          const context = this,
+            args = arguments;
+          clearTimeout(timeout);
+          timeout = setTimeout(() => func.apply(context, args), wait);
+        };
+      }
+
+      const MAX_SEED = 1e10;
+
+      const emptyUri =
+        "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
+      const $ = document.querySelector.bind(document);
+
+      const timeline = $(".timeline");
+      if (timeline) timeline.max = MAX_SEED;
+
+      const player = $("#player");
+      // player.style.visibility = "hidden";
+      // player.style.position = "fixed";
+      // player.style.pointerEvents = "none";
+      player.src = emptyUri;
+
+      $(".filter-canvas").onclick = async (ev) => {
+        ev.preventDefault();
+        let canvas = ev.currentTarget;
+        if (ev.currentTarget == player) {
+          canvas = document.createElement("canvas");
+          const context = canvas.getContext("2d");
+          canvas.width = player.naturalWidth;
+          canvas.height = player.naturalHeight;
+          context.drawImage(player, 0, 0, canvas.width, canvas.height);
+        }
+        const a = document.createElement("a");
+        const blob = await new Promise((r) => canvas.toBlob(r, "image/png"));
+        a.href = URL.createObjectURL(blob);
+        a.download = Date.now() + ".png";
+        a.click();
+      };
+
+      let _abortController;
+      let seed;
+
+      const updateSeed = () => {
+        $(".seed").textContent = seed;
+      };
+
+      const newSeed = () => {
+        seed = Math.floor(Math.random() * MAX_SEED);
+        if (timeline) timeline.value = seed;
+        localStorage.setItem("seed", String(seed));
+        updateSeed();
+      };
+
+      const stepSeed = () => {
+        if (!timeline) return;
+        timeline.value++;
+        seed = timeline.value;
+        localStorage.setItem("seed", String(seed));
+        updateSeed();
+        promptChanged();
+      };
+
+      const initialSeed = localStorage.getItem("seed");
+      if (initialSeed) {
+        seed = parseInt(initialSeed, 10);
+        updateSeed();
+      } else {
+        newSeed();
+      }
+
+      // setInterval(stepSeed, 100);
+      if (timeline) {
+        timeline.oninput = () => {
+          seed = timeline.value;
+          localStorage.setItem("seed", String(seed));
+          updateSeed();
+          throttleChange();
+        };
+      }
+
+      const input = $(".input");
+      let prompt = localStorage.getItem("prompt") || "moon landing";
+      let prompt_embeds;
+      input.value = prompt;
+      const throttleChange = debounce(promptChanged, 5);
+
+      input.oninput = (ev) => {
+        ev.preventDefault();
+        if (prompt !== input.value) {
+          prompt = input.value;
+          storePrompt();
+          throttleChange();
+        }
+      };
+
+      $(".shuffle").onclick = async (ev) => {
+        ev.preventDefault();
+        newSeed();
+        promptChanged();
+      };
+
+      connect();
+
+      async function fetchPromptEmbedding(p) {
+        const queryString = new URLSearchParams({
+          prompt: p,
+        }).toString();
+        const resp = await fetch(`/prompt?${queryString}`);
+        return resp.json();
+      }
+
+      function connect() {
+        let socket;
+        let retry;
+        const reconnect = () => {
+          clearTimeout(retry);
+          socket = new WebSocket(`ws://${window.location.host}/socket`);
+          socket.onopen = async () => {
+            clearTimeout(retry);
+            console.log("Socket Opened");
+            player.src = `/stream`;
+            promptChanged();
+            socket.send(JSON.stringify({ event: "ping" }));
+          };
+          socket.onclose = async () => {
+            console.log("Socket Closed");
+            player.src = emptyUri;
+            clearTimeout(retry);
+            retry = setTimeout(() => {
+              console.log("Attempting reconnect");
+              reconnect();
+            }, 1000);
+          };
+          socket.onmessage = (ev) => {
+            if (ev.data === "image_chunk") {
+              filter(player);
+            }
+          };
+        };
+        reconnect();
+      }
+
+      function filter(player) {
+        if (player.naturalWidth == 0 || player.naturalHeight == 0) return;
+        const canvas = $(".filter-canvas");
+        const context = canvas.getContext("2d", {
+          willReadFrequently: true,
+        });
+        console.time("draw");
+        const downsample = parseInt($(".downsample").value);
+        const scaleFactor = 1 / downsample;
+        canvas.width = Math.floor(scaleFactor * player.naturalWidth);
+        canvas.height = Math.floor(scaleFactor * player.naturalHeight);
+
+        context.drawImage(player, 0, 0, canvas.width, canvas.height);
+        const imageData = context.getImageData(
+          0,
+          0,
+          canvas.width,
+          canvas.height
+        );
+        const palette = quantize(
+          imageData.data,
+          parseInt($(".colors").value, 10)
+        );
+        const index = dither(
+          imageData.data,
+          imageData.width,
+          imageData.height,
+          palette
+        );
+        // for (let i = 0; i < imageData.width * imageData.height; i++) {
+        //   const idx = index[i];
+        //   const [r, g, b] = palette[idx];
+        //   imageData.data[i * 4 + 0] = r;
+        //   imageData.data[i * 4 + 1] = g;
+        //   imageData.data[i * 4 + 2] = b;
+        // }
+
+        const upScaleFactor = 1;
+        canvas.width = Math.floor(upScaleFactor * player.naturalWidth);
+        canvas.height = Math.floor(upScaleFactor * player.naturalHeight);
+        const w = canvas.width / imageData.width;
+        const h = canvas.height / imageData.height;
+        for (let y = 0; y < imageData.height; y++) {
+          for (let x = 0; x < imageData.width; x++) {
+            const i = x + y * imageData.width;
+            const idx = index[i];
+            const rgb = palette[idx].slice(0, 3);
+            context.fillStyle = `rgb(${rgb.join(", ")})`;
+            context.fillRect(
+              Math.floor(x * w),
+              Math.floor(y * h),
+              Math.ceil(w),
+              Math.ceil(h)
+            );
+          }
+        }
+        console.timeEnd("draw");
+        // context.putImageData(imageData, 0, 0);
+      }
+
+      function storePrompt() {
+        localStorage.setItem("prompt", prompt);
+      }
+
+      async function promptChanged() {
+        storePrompt();
+
+        console.log("New Prompt", prompt);
+        prompt_embeds = await fetchPromptEmbedding(prompt);
+
+        const steps = parseInt($(".steps").value, 10);
+        const width = parseInt($(".width").value, 10);
+        const height = parseInt($(".height").value, 10);
+        const queryString = new URLSearchParams().toString();
+        const resp = await fetch(`/generate?${queryString}`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            prompt_embeds,
+            // height: Math.floor(256 * (5 / 4)),
+            width: width,
+            height: height,
+            steps: steps,
+            seed,
+            // intermediate_steps: false,
+          }),
+        });
+        await resp.json();
+      }
+    </script>
+  </body>
+</html>
