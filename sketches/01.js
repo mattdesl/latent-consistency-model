@@ -80,19 +80,19 @@ const sketch = async ({ width, height, update }) => {
     const list = nodes.sort((a, b) => b.width * b.height - a.width * a.height);
 
     let steps = 4;
-    for (let step = 2; step <= steps; step++) {
-      for (const node of list) {
-        let seed = node.generation ? node.generation.seed : imageSeed();
-        node.generation = await generate({
-          prompt,
-          seed,
-          steps: step,
-          width: imageWidth,
-          height: imageHeight,
-        });
-        update();
-      }
+    // for (let step = 2; step <= steps; step++) {
+    for (const node of list) {
+      let seed = node.generation ? node.generation.seed : imageSeed();
+      node.generation = await generate({
+        prompt,
+        seed,
+        steps,
+        width: imageWidth,
+        height: imageHeight,
+      });
+      update();
     }
+    // }
   };
   startFetch();
 
