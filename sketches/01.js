@@ -73,13 +73,14 @@ const sketch = async ({ width, height, update }) => {
     const [ox, oy] = random.insideCircle(dim * 0.01);
     node.x += ox;
     node.y += oy;
+    node.rotation = random.gaussian(0, (1 * Math.PI) / 180);
   }
 
   const startFetch = async () => {
-    const list = nodes.sort((a, b) => a.width * a.height - b.width * b.height);
+    const list = nodes.sort((a, b) => b.width * b.height - a.width * a.height);
 
     let steps = 4;
-    for (let step = 1; step <= steps; step++) {
+    for (let step = 2; step <= steps; step++) {
       for (const node of list) {
         let seed = node.generation ? node.generation.seed : imageSeed();
         node.generation = await generate({
@@ -96,12 +97,22 @@ const sketch = async ({ width, height, update }) => {
   startFetch();
 
   return ({ context, width, height }) => {
+    const lineWidth = dim * 0.00175;
+    context.lineJoin = context.lineCap = "round";
     context.fillStyle = "black";
     context.fillRect(0, 0, width, height);
 
     nodes.forEach((node) => {
+      context.save();
+      const nx = node.x + node.width / 2;
+      const ny = node.y + node.height / 2;
+      context.translate(nx, ny);
+      context.rotate(node.rotation);
+      context.translate(-nx, -ny);
+
       if (node.generation) {
         context.save();
+
         context.beginPath();
         context.rect(node.x, node.y, node.width, node.height);
         context.clip();
@@ -114,8 +125,11 @@ const sketch = async ({ width, height, update }) => {
         );
         context.restore();
       } else {
+        context.lineWidth = lineWidth;
+        context.strokeStyle = "white";
         context.strokeRect(node.x, node.y, node.width, node.height);
       }
+      context.restore();
     });
   };
 };
