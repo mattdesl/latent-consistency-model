@@ -3,7 +3,7 @@ import * as random from "canvas-sketch-util/random.js";
 import bsp, { split, Partition } from "./util/bsp.js";
 import { traverseDepthFirst, getLeafNodes } from "./util/tree-util";
 
-random.setSeed("921288" || random.getRandomSeed());
+random.setSeed("" || random.getRandomSeed());
 console.log("Seed:", random.getSeed());
 
 const settings = {
@@ -61,18 +61,23 @@ const sketch = async ({ width, height, update }) => {
 
   const tree = bsp(rootBounds, {
     minDimension: width * 0.01,
-    splitCount: 20,
+    splitCount: 25,
     maxDepth: Infinity,
     squariness: 1,
   });
 
+  const generationSet = new Set();
+  const maxGenerations = 5;
+
   const nodes = getLeafNodes(tree);
   const prompts = [
-    "zebra",
+    // "zebra",
     "old man",
     "old woman",
     "mature woman",
     "business woman",
+    "astronaut",
+    "vintage submarine sea man",
   ];
 
   for (const node of nodes) {
@@ -87,17 +92,23 @@ const sketch = async ({ width, height, update }) => {
 
     let steps = 4;
     for (const node of list) {
-      let seed = node.generation ? node.generation.seed : imageSeed();
       const inject = random.pick(prompts);
       const prompt = `portrait of a ${inject}, bokeh, depth of field, 8k hd, zoomed out, black and white ansel adams photography`;
 
-      node.generation = await generate({
-        prompt,
-        seed,
-        steps,
-        width: imageWidth,
-        height: imageHeight,
-      });
+      let generation;
+      if (generationSet.size >= maxGenerations) {
+        generation = random.pick([...generationSet]);
+      } else {
+        generation = await generate({
+          prompt,
+          steps,
+          width: imageWidth,
+          height: imageHeight,
+        });
+        generationSet.add(generation);
+      }
+      node.generation = generation;
+
       update();
     }
   };
