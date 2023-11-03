@@ -43,7 +43,7 @@ const sketch = async ({ width, height, update }) => {
   const rootWidth = width - margin * 2;
   const rootHeight = height - margin * 2;
 
-  const maxImageSize = 256;
+  const maxImageSize = 768;
   const ratio = Math.min(
     1,
     maxImageSize / rootWidth,
@@ -62,8 +62,8 @@ const sketch = async ({ width, height, update }) => {
 
   const tree = bsp(rootBounds, {
     minDimension: width * 0.01,
-    // splitCount: 25,
-    maxDepth: 6,
+    splitCount: 30,
+    maxDepth: Infinity,
     squariness: 1,
   });
 
@@ -91,10 +91,10 @@ const sketch = async ({ width, height, update }) => {
   const startFetch = async () => {
     const list = nodes.sort((a, b) => b.width * b.height - a.width * a.height);
 
-    let steps = 4;
+    let steps = 5;
     for (const node of list) {
       const inject = random.pick(prompts);
-      const prompt = `portrait of a ${inject}, bokeh, depth of field, 8k hd, zoomed out, black and white ansel adams photography`;
+      const prompt = `portrait of a ${inject}, bokeh, depth of field, 8k hd, zoomed out, pastel colors`;
 
       let generation;
       if (generationSet.size >= maxGenerations) {
