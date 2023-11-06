@@ -30,11 +30,12 @@
         margin-left: 10px;
       }
       .prompt-container {
-        width: 300px;
+        width: 360px;
       }
     </style>
   </head>
   <body>
+    <button class="haiku">haiku</button>
     <input type="text" class="input prompt-container" placeholder="a prompt" />
     <label class="seed"></label>
     <button class="shuffle">🎲</button>
@@ -190,6 +191,26 @@
           storePrompt();
           throttleChange();
         }
+      };
+
+      let haikus;
+      const randomHaiku = async () => {
+        if (!haikus) {
+          const txt = await (await fetch("haiku-23k.txt")).text();
+          haikus = txt
+            .split("\n")
+            .map((line) => line.split("/").map((n) => n.trim()))
+            .flat();
+          console.log(haikus);
+        }
+        return haikus[Math.floor(Math.random() * haikus.length)];
+      };
+
+      document.querySelector(".haiku").onclick = async (ev) => {
+        ev.preventDefault();
+        input.value = await randomHaiku();
+        prompt = input.value;
+        promptChanged();
       };
 
       $(".shuffle").onclick = async (ev) => {

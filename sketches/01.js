@@ -98,16 +98,17 @@ const sketch = async ({ width, height, update }) => {
     let steps = 4;
     for (const node of list) {
       // const inject = random.pick(prompts);
-      const prompts = [
-        `wildflower meadow, bokeh, pastel colors, motion from the wind, drifting petals, dusk sunset, wide shot, 8k hd`,
-        `cloud photo crop, high contrast, dusk, colourful`,
-        "textile, bauhaus, abstract, colorful",
-        "hot air balloon race, colourful, vivid, blue cloudy skies",
-        `sonia delaunay, geometric abstraction, detailed landscape of a field, pastel colors`,
-        `skateboarding, photography, skater, fisheye`,
-        // `portrait of a ${inject}, bokeh, depth of field, 8k hd, zoomed out, pastel colors`,
-      ];
-      const prompt = random.pick(prompts);
+      // const prompts = [
+      //   `wildflower meadow, bokeh, pastel colors, motion from the wind, drifting petals, dusk sunset, wide shot, 8k hd`,
+      //   `cloud photo crop, high contrast, dusk, colourful`,
+      //   "textile, bauhaus, abstract, colorful",
+      //   "hot air balloon race, colourful, vivid, blue cloudy skies",
+      //   `sonia delaunay, geometric abstraction, detailed landscape of a field, pastel colors`,
+      //   `skateboarding, photography, skater, fisheye`,
+      //   // `portrait of a ${inject}, bokeh, depth of field, 8k hd, zoomed out, pastel colors`,
+      // ];
+      // const prompt = random.pick(prompts);
+      const prompt = "macro flower photography, bokeh";
 
       let generation;
       if (generationSet.size >= maxGenerations) {
