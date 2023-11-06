@@ -43,7 +43,7 @@ const sketch = async ({ width, height, update }) => {
   const rootWidth = width - margin * 2;
   const rootHeight = height - margin * 2;
 
-  const maxImageSize = 768;
+  const maxImageSize = 512;
   const ratio = Math.min(
     1,
     maxImageSize / rootWidth,
@@ -73,7 +73,7 @@ const sketch = async ({ width, height, update }) => {
   const generationSet = new Set();
 
   const nodes = getLeafNodes(tree);
-  const maxGenerations = 5;
+  const maxGenerations = 10;
   // const maxGenerations = nodes.length;
   const prompts = [
     // "zebra",
