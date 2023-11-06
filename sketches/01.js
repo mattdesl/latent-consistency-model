@@ -112,7 +112,7 @@ const sketch = async ({ width, height, update }) => {
       // const prompt = 'macro 8k hd plant photography, bokeh'
       // const prompt = 'abstract architecture photography'
       // const prompt = 'black and white photograph, hd 8k, light and shadow, dappled sunlight'
-      const prompt = "dappled sunlight, macro";
+      const prompt = "neon tokyo; dappled sunlight, macro";
 
       let generation;
       if (generationSet.size >= maxGenerations) {
