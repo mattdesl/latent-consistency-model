@@ -98,7 +98,7 @@ const sketch = async ({ width, height, update }) => {
     let steps = 4;
     for (const node of list) {
       // const inject = random.pick(prompts);
-      // const prompts = [
+      // const prompts = [z
       //   `wildflower meadow, bokeh, pastel colors, motion from the wind, drifting petals, dusk sunset, wide shot, 8k hd`,
       //   `cloud photo crop, high contrast, dusk, colourful`,
       //   "textile, bauhaus, abstract, colorful",
@@ -108,9 +108,9 @@ const sketch = async ({ width, height, update }) => {
       //   // `portrait of a ${inject}, bokeh, depth of field, 8k hd, zoomed out, pastel colors`,
       // ];
       // const prompt = random.pick(prompts);
-      // const prompt = "macro flower photography, bokeh";
-      // const prompt = 'macro 8k hd plant photography, bokeh'
-      const prompt = "abstract architecture photography";
+      const prompt = "macro flower photography, bokeh";
+      // const prompt = "macro 8k hd plant photography, bokeh";
+      // const prompt = "abstract architecture photography";
       // const prompt =
       //   "black and white photograph, hd 8k, light and shadow, dappled sunlight";
       // const prompt =
