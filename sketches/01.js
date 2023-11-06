@@ -66,8 +66,8 @@ const sketch = async ({ width, height, update }) => {
     // maxDepth: Infinity,
 
     splitCount: Infinity,
-    maxDepth: 6,
-    // squariness: 1,
+    maxDepth: 4,
+    squariness: 1,
   });
 
   const generationSet = new Set();
