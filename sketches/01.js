@@ -109,7 +109,10 @@ const sketch = async ({ width, height, update }) => {
       // ];
       // const prompt = random.pick(prompts);
       // const prompt = "macro flower photography, bokeh";
-      const prompt = "dappled sunlight, macro";
+      // const prompt = 'geology closeup photo 8k, painted, chromatic'
+      // const prompt = "dappled sunlight, macro";
+      const prompt =
+        "Electron Microscopy, closeup, forest coral reef, detail, matcap, chromatic";
       // const prompt = "macro 8k hd plant photography, bokeh";
       // const prompt = "abstract architecture photography";
       // const prompt =

@@ -86,6 +86,7 @@
         class="downsample"
       />
     </div>
+    <input type="text" class="pre-prompt" placeholder="pre-prompt" />
     <div>
       <img
         id="player"
@@ -113,6 +114,8 @@
 
       const timeline = $(".timeline");
       if (timeline) timeline.max = MAX_SEED;
+
+      let socket;
 
       const player = $("#player");
       // player.style.visibility = "hidden";
@@ -182,9 +185,9 @@
       let prompt = localStorage.getItem("prompt") || "moon landing";
       let prompt_embeds;
       input.value = prompt;
-      const throttleChange = debounce(promptChanged, 5);
+      const throttleChange = debounce(promptChanged, 50);
 
-      input.oninput = (ev) => {
+      const promptInputChange = (ev) => {
         ev.preventDefault();
         if (prompt !== input.value) {
           prompt = input.value;
@@ -192,16 +195,31 @@
           throttleChange();
         }
       };
+      input.oninput = promptInputChange;
+      const prePrompt = $(".pre-prompt");
+      prePrompt.value = localStorage.getItem("pre-prompt") || "";
+      prePrompt.oninput = (ev) => {
+        ev.preventDefault();
+        localStorage.setItem("pre-prompt", prePrompt.value);
+        throttleChange();
+      };
 
       let haikus;
       const randomHaiku = async () => {
         if (!haikus) {
-          const txt = await (await fetch("haiku-23k.txt")).text();
+          const txt = await (await fetch("captions.txt")).text();
           haikus = txt
+            .trim()
             .split("\n")
-            .map((line) => line.split("/").map((n) => n.trim()))
-            .flat();
-          console.log(haikus);
+            .map((t) => t.split(",").slice(1).join(","));
+          // .map((n) => `chromatic motion blurred grainy photo of ${n}`);
+          // .map((n) => `game pixel art: ${n}`);
+          // const txt = await (await fetch("haiku-23k.txt")).text();
+          // haikus = txt
+          //   .split("\n")
+          //   .map((line) => line.split("/").map((n) => n.trim()))
+          //   .flat();
+          // console.log(haikus);
         }
         return haikus[Math.floor(Math.random() * haikus.length)];
       };
@@ -210,6 +228,7 @@
         ev.preventDefault();
         input.value = await randomHaiku();
         prompt = input.value;
+        newSeed();
         promptChanged();
       };
 
@@ -229,8 +248,11 @@
         return resp.json();
       }
 
+      function isReady() {
+        return socket && socket.readyState === WebSocket.OPEN;
+      }
+
       function connect() {
-        let socket;
         let retry;
         const reconnect = () => {
           clearTimeout(retry);
@@ -328,7 +350,27 @@
         storePrompt();
 
         console.log("New Prompt", prompt);
+        if (!isReady()) return;
+
         prompt_embeds = await fetchPromptEmbedding(prompt);
+
+        if (prePrompt.value) {
+          const target_embeds = await fetchPromptEmbedding(prePrompt.value);
+          const lerpAmount = 0.5;
+          for (let i = 0; i < prompt_embeds.length; i++) {
+            for (let j = 0; j < prompt_embeds[i].length; j++) {
+              prompt_embeds[i][j] = lerpArray(
+                prompt_embeds[i][j],
+                target_embeds[i][j],
+                lerpAmount
+              );
+              // for (let k = 0; k < prompt_embeds[i][j].length; k++) {
+              //   prompt_embeds[i][j][k] =
+              //     prompt_embeds[i][j][k] + target_embeds[i][j][k] * 2;
+              // }
+            }
+          }
+        }
 
         const steps = parseInt($(".steps").value, 10);
         const width = parseInt($(".width").value, 10);
@@ -346,10 +388,28 @@
             height: height,
             steps: steps,
             seed,
+            guidance_scale: 12,
             // intermediate_steps: false,
           }),
         });
         await resp.json();
+      }
+
+      function lerp(min, max, t) {
+        return min * (1 - t) + max * t;
+      }
+
+      function lerpArray(min, max, t, out) {
+        out = out || [];
+        if (min.length !== max.length) {
+          throw new TypeError(
+            "min and max array are expected to have the same length"
+          );
+        }
+        for (var i = 0; i < min.length; i++) {
+          out[i] = lerp(min[i], max[i], t);
+        }
+        return out;
       }
     </script>
   </body>
