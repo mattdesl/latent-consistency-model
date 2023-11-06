@@ -108,7 +108,11 @@ const sketch = async ({ width, height, update }) => {
       //   // `portrait of a ${inject}, bokeh, depth of field, 8k hd, zoomed out, pastel colors`,
       // ];
       // const prompt = random.pick(prompts);
-      const prompt = "macro flower photography, bokeh";
+      // const prompt = "macro flower photography, bokeh";
+      // const prompt = 'macro 8k hd plant photography, bokeh'
+      // const prompt = 'abstract architecture photography'
+      // const prompt = 'black and white photograph, hd 8k, light and shadow, dappled sunlight'
+      const prompt = "dappled sunlight, macro";
 
       let generation;
       if (generationSet.size >= maxGenerations) {
