@@ -110,9 +110,9 @@ const sketch = async ({ width, height, update }) => {
       // const prompt = random.pick(prompts);
       // const prompt = "macro flower photography, bokeh";
       // const prompt = 'macro 8k hd plant photography, bokeh'
-      // const prompt = 'abstract architecture photography'
-      const prompt =
-        "black and white photograph, hd 8k, light and shadow, dappled sunlight";
+      const prompt = "abstract architecture photography";
+      // const prompt =
+      //   "black and white photograph, hd 8k, light and shadow, dappled sunlight";
       // const prompt =
       //   "neon tokyo; dappled sunlight, macro; bokeh, photograph leica";
 
