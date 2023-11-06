@@ -43,7 +43,7 @@ const sketch = async ({ width, height, update }) => {
   const rootWidth = width - margin * 2;
   const rootHeight = height - margin * 2;
 
-  const maxImageSize = 512;
+  const maxImageSize = 768;
   const ratio = Math.min(
     1,
     maxImageSize / rootWidth,
@@ -95,12 +95,14 @@ const sketch = async ({ width, height, update }) => {
   const startFetch = async () => {
     const list = nodes.sort((a, b) => b.width * b.height - a.width * a.height);
 
-    let steps = 5;
+    let steps = 4;
     for (const node of list) {
       const inject = random.pick(prompts);
       // const prompt = `wildflower meadow, bokeh, pastel colors, motion from the wind, drifting petals, dusk sunset, wide shot, 8k hd`;
-      const prompt = `cloud photo crop, high contrast, dusk, colourful`;
-      // const prompt = `sonia delaunay, geometric abstraction, detailed landscape of a field, pastel colors`;
+      // const prompt = `cloud photo crop, high contrast, dusk, colourful`;
+      // const prompt = "textile, bauhaus, abstract, colorful";
+      // const prompt = 'hot air balloon race, colourful, vivid, blue cloudy skies'
+      const prompt = `sonia delaunay, geometric abstraction, detailed landscape of a field, pastel colors`;
       // const prompt = `skateboarding, photography, skater, fisheye`;
       // const prompt = `portrait of a ${inject}, bokeh, depth of field, 8k hd, zoomed out, pastel colors`;
 
