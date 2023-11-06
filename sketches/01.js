@@ -66,7 +66,7 @@ const sketch = async ({ width, height, update }) => {
     // maxDepth: Infinity,
 
     splitCount: Infinity,
-    maxDepth: 4,
+    maxDepth: 5,
     squariness: 1,
   });
 
@@ -112,7 +112,7 @@ const sketch = async ({ width, height, update }) => {
       // const prompt = 'geology closeup photo 8k, painted, chromatic'
       // const prompt = "dappled sunlight, macro";
       const prompt =
-        "Electron Microscopy, closeup, forest coral reef, detail, matcap, chromatic";
+        "Electron Microscopy, closeup, forest coral reef, detail, matcap, chromatic, pastel";
       // const prompt = "macro 8k hd plant photography, bokeh";
       // const prompt = "abstract architecture photography";
       // const prompt =
