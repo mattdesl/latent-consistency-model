@@ -12,8 +12,6 @@ class Predictor:
     def _load_model(self):
         model = DiffusionPipeline.from_pretrained(
             "SimianLuo/LCM_Dreamshaper_v7",
-            custom_pipeline="latent_consistency_txt2img",
-            custom_revision="main"
         )
         model.to(torch_device="cpu", torch_dtype=torch.float32).to('mps:0')
         return model
@@ -32,7 +30,20 @@ class Predictor:
 
         return self._save_result(result, prompt, seed, width, height, steps)
 
-    def _save_result(self, result, prompt: str, seed: int, width: int, height: int, steps: int):
+    def predict_from_file(self, prompt_file: str, width: int, height: int, steps: int, seed: int = None, continuous: bool = False):
+        with open(prompt_file, 'r') as file:
+            prompts = file.readlines()
+
+        while True:
+            for prompt in prompts:
+                prompt = prompt.strip()
+                output_path = self.predict(prompt, width, height, steps, seed)
+                print(f"Output image saved for '{prompt}' to: {output_path}")
+
+            if not continuous:
+                return
+
+    def _save_result(self, result):
         timestamp = time.strftime("%Y%m%d-%H%M%S")
         output_dir = "output"
         if not os.path.exists(output_dir):
@@ -58,28 +69,8 @@ def main():
     args = parse_args()
     predictor = Predictor()
 
-    # If prompt file is provided, read prompts from file
-    if args.prompt_file:
-        prompts = []
-        with open(args.prompt_file, "r") as f:
-            prompt_lines = f.readlines()
-            prompts = [prompt.strip() for prompt in prompt_lines]
-
-        if args.continuous:
-            print("Continuous passed, will iterate forever.")
-
-            try:
-                while True:
-                    for prompt in prompts:
-                        print(f"Generating image for prompt: '{prompt}'")
-                        output_path = predictor.predict(prompt, args.width, args.height, args.steps, args.seed)
-                        print(f"Output image saved to: {output_path}")
-            except KeyboardInterrupt:
-                print("\nStopped by user.")
-        else:
-            for prompt in prompts:
-                output_path = predictor.predict(prompt, args.width, args.height, args.steps, args.seed)
-                print(f"Output image saved to: {output_path}")
+    if args.prompts:
+        predictor.predict_from_file(args.prompts, args.width, args.height, args.steps, args.seed, args.continuous)
     else:
         if not args.prompt:
             print("Please provide a prompt or a prompt file.")
@@ -106,8 +97,8 @@ def main():
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Generate images based on text prompts.")
-    parser.add_argument("--prompt", type=str, default=None, help="A text prompt for image generation.")
-    parser.add_argument("--prompt-file", type=str, default=None, help="A file containing text prompts for image generation, one prompt per line.")
+    parser.add_argument("prompt", type=str, help="A single text prompt for image generation.", nargs='?')
+    parser.add_argument("--prompts", type=str, help="A file containing text prompts for image generation, one per line.")
     parser.add_argument("--width", type=int, default=512, help="The width of the generated image.")
     parser.add_argument("--height", type=int, default=512, help="The height of the generated image.")
     parser.add_argument("--steps", type=int, default=8, help="The number of inference steps.")

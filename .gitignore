@@ -1,5 +1,5 @@
 venv
 output/
-.DS_Store
 prompts.txt
+.DS_Store
 node_modules
